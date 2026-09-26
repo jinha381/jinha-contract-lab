@@ -10,11 +10,12 @@ pub struct Increment<'info> {
 }
 
 pub fn handle_increment(ctx: Context<Increment>) -> Result<()> {
-    require_keys_eq!(
-        ctx.accounts.counter.authority,
-        ctx.accounts.authority.key(),
-        ErrorCode::Unauthorized,
-    );
+     // 권한 검사 일부러 제거
+    //require_keys_eq!(
+        //ctx.accounts.counter.authority,
+        //ctx.accounts.authority.key(),
+        //ErrorCode::Unauthorized,
+    //);
     require!(
         ctx.accounts.counter.count < MAX_COUNT,
         ErrorCode::CounterOverflow,

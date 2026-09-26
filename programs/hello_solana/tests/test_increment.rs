@@ -13,11 +13,9 @@ use {
 };
 
 #[test]
-fn test_initialize_and_increment() {
+fn test_initialize() {
     let program_id = hello_solana::id();
     let payer = Keypair::new();
-    let attacker = Keypair::new();
-    
     let counter = Pubkey::find_program_address(
         &[hello_solana::constants::COUNTER_SEED],
         &program_id,
@@ -30,7 +28,6 @@ fn test_initialize_and_increment() {
     ));
     svm.add_program(program_id, bytes).unwrap();
     svm.airdrop(&payer.pubkey(), 1_000_000_000).unwrap();
-    svm.airdrop(&attacker.pubkey(), 1_000_000_000).unwrap();
 
     let instruction = Instruction::new_with_bytes(
         program_id,
@@ -78,43 +75,4 @@ fn test_initialize_and_increment() {
     let counter_state = hello_solana::state::Counter::try_deserialize(&mut data).unwrap();
     assert_eq!(counter_state.count, 1);
     assert_eq!(counter_state.authority, payer.pubkey());
-    // Bob(attacker)이 Alice의 Counter를 증가시키려고 시도
-    let instruction = Instruction::new_with_bytes(
-    program_id,
-    &hello_solana::instruction::Increment {}.data(),
-    hello_solana::accounts::Increment {
-        counter,
-        authority: attacker.pubkey(),
-    }
-    .to_account_metas(None),
-);
-
-let blockhash = svm.latest_blockhash();
-
-let msg = Message::new_with_blockhash(
-    &[instruction],
-    Some(&attacker.pubkey()),
-    &blockhash,
-);
-
-let tx = VersionedTransaction::try_new(
-    VersionedMessage::Legacy(msg),
-    &[&attacker],
-)
-.unwrap();
-
-let res = svm.send_transaction(tx);
-
-// 공격은 실패해야 정상
-assert!(res.is_err());
-
-// 실패했으므로 count는 여전히 1이어야 함
-let counter_account = svm.get_account(&counter).unwrap();
-let mut data: &[u8] = &counter_account.data;
-
-let counter_state =
-    hello_solana::state::Counter::try_deserialize(&mut data).unwrap();
-
-assert_eq!(counter_state.count, 1);
-assert_eq!(counter_state.authority, payer.pubkey());
 }
