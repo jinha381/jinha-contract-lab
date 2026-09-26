@@ -2,12 +2,15 @@ pub mod constants;
 pub mod error;
 pub mod instructions;
 pub mod state;
+// Vault 알리기
+pub mod vault;
 
 use anchor_lang::prelude::*;
 
 pub use constants::*;
 pub use instructions::*;
 pub use state::*;
+pub use vault::*;
 
 declare_id!("5oWptszzLcAJhzadLLMGc6R1ghrqCqWVohsTzaEqL1wK");
 
@@ -21,5 +24,9 @@ pub mod hello_solana {
 
     pub fn increment(ctx: Context<Increment>) -> Result<()> {
         crate::instructions::increment::handle_increment(ctx)
+    }
+
+    pub fn initialize_vault(ctx: Context<InitializeVault>) -> Result<()> {
+    crate::vault::initialize_vault::handle_initialize_vault(ctx)
     }
 }
