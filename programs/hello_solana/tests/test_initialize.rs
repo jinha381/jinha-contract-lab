@@ -105,16 +105,19 @@ let tx = VersionedTransaction::try_new(
 
 let res = svm.send_transaction(tx);
 
-// 공격은 실패해야 정상
-assert!(res.is_err());
+// 기존 assert!(res.is_err());
+// 취약한 프로그램에서는 Bob의 공격이 성공
+assert!(res.is_ok());
 
-// 실패했으므로 count는 여전히 1이어야 함
+// 실험1 : 실패했으므로 count는 여전히 1이어야 함
 let counter_account = svm.get_account(&counter).unwrap();
 let mut data: &[u8] = &counter_account.data;
 
 let counter_state =
     hello_solana::state::Counter::try_deserialize(&mut data).unwrap();
 
-assert_eq!(counter_state.count, 1);
+// 기존 assert_eq!(counter_state.count, 1);
+assert_eq!(counter_state.count, 2);
+// Counter의 주인은 여전히 Alice
 assert_eq!(counter_state.authority, payer.pubkey());
 }
