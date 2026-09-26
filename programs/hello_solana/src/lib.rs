@@ -29,4 +29,9 @@ pub mod hello_solana {
     pub fn initialize_vault(ctx: Context<InitializeVault>) -> Result<()> {
     crate::vault::initialize_vault::handle_initialize_vault(ctx)
     }
+
+    pub fn deposit(ctx: Context<Deposit>, amount: u64,) -> Result<()> {
+    crate::vault::deposit::handle_deposit(ctx, amount)
+    }
+
 }
