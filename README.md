@@ -1,5 +1,7 @@
 # Hello Solana
 
+> 논문 연구 실험: [research/README.md](research/README.md) — 압수 가상자산의 온체인 거래와 관리기록 간 정합성 검증. 이 브랜치의 기존 Counter 프로그램은 변경하지 않았습니다.
+
 Solana 스마트 컨트랙트의 핵심 개념을 실제 코드와 트랜잭션으로 학습하기 위한 Anchor 프로젝트입니다.
 
 현재는 `Counter` 프로그램을 통해 다음 내용을 실습합니다.
