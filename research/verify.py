@@ -1,7 +1,8 @@
-"""Offline prototype for the paper's C/A/H/L/T consistency rules.
+"""논문의 C/A/H/L/T 증거 묶음에 M1 또는 M2 판정을 적용한다.
 
-Input is a JSON evidence bundle, not a claim that RPC data is complete or trusted.
-Amounts and fees are integer lamports; times are ISO 8601 UTC strings.
+입력 JSON의 금액·수수료는 lamports 정수, 시각은 UTC ISO 8601 문자열이다.
+이 모듈은 제공된 기록의 정합성만 계산한다. RPC 자료나 관리기록의 진위를
+독립적으로 증명하지 않으므로 M2의 자료 충분성은 coverage_complete에 의존한다.
 """
 
 import argparse
@@ -11,6 +12,12 @@ from pathlib import Path
 
 
 def verdict(bundle, baseline=False, omit=()):
+    """증거 묶음을 평가해 최종 판정, 규칙별 상태, 구체적 사유를 반환한다.
+
+    baseline=True는 기본 조건 비교(M1), 기본값은 R0~R4를 적용하는 M2다.
+    omit은 승인 이력·사용횟수·R3 제거 실험에 사용한다.
+    """
+    # C/A/H/L/T는 각각 관리대상·승인·승인 이력·실행기록·온체인 거래다.
     c = bundle.get("C", {})
     approvals = bundle.get("A", [])
     history = bundle.get("H", [])
@@ -21,10 +28,13 @@ def verdict(bundle, baseline=False, omit=()):
     reasons = []
 
     def mark(rule, status, reason):
+        """규칙의 상태를 기록한다. 같은 규칙에서는 확정된 FAIL을 유지한다."""
         if checks[rule] != "FAIL" or status == "FAIL":
             checks[rule] = status
         reasons.append({"rule": rule, "status": status, "detail": reason})
 
+    # R0: 판단 전에 관리대상과 거래 자료가 충분한지 확인한다.
+    # M1에는 coverage_complete 요구를 적용하지 않아 M1/M2의 차이를 볼 수 있다.
     required_c = ("case_id", "wallet", "asset", "start", "end", "opening", "closing")
     if any(k not in c for k in required_c) or not isinstance(txs, list):
         mark("R0", "UNKNOWN", "C or T is incomplete")
@@ -33,6 +43,7 @@ def verdict(bundle, baseline=False, omit=()):
     if checks["R0"] == "UNKNOWN":
         return {"verdict": "UNKNOWN", "checks": checks, "reasons": reasons}
 
+    # 거래의 필수 필드 누락·중복 TXID는 연결 자체가 불명확하므로 보류한다.
     required_t = ("txid", "from", "to", "amount", "time", "status", "fee")
     if any(not isinstance(t, dict) or any(k not in t for k in required_t) for t in txs):
         mark("R0", "UNKNOWN", "transaction fields are incomplete")
@@ -42,6 +53,8 @@ def verdict(bundle, baseline=False, omit=()):
     if checks["R0"] == "UNKNOWN":
         return {"verdict": "UNKNOWN", "checks": checks, "reasons": reasons}
 
+    # R1: 모든 거래가 지정 지갑·자산·관측기간에 속하는지 확인한다.
+    # 승인 검사는 관리지갑에서 성공적으로 출금된 거래에만 적용한다.
     wallet = c["wallet"]
     outgoing = []
     for t in txs:
@@ -52,6 +65,8 @@ def verdict(bundle, baseline=False, omit=()):
         if t["from"] == wallet and t["status"] == "success":
             outgoing.append(t)
 
+    # R2: 금액과 수신주소로 승인 후보를 찾고 L의 승인번호로 후보를 좁힌다.
+    # 후보가 둘 이상이면 임의로 선택하지 않고 R0 UNKNOWN으로 처리한다.
     used = defaultdict(int)
     for t in sorted(outgoing, key=lambda x: (x["time"], x["txid"])):
         candidates = [a for a in approvals if a.get("recipient") == t["to"] and a.get("amount") == t["amount"]]
@@ -67,6 +82,7 @@ def verdict(bundle, baseline=False, omit=()):
             continue
         a = candidates[0]
         if not baseline:
+            # 거래 시점의 유효기간, 허용 사용횟수, 가장 최근 승인 상태를 확인한다.
             if not (a.get("valid_from", "") <= t["time"] <= a.get("valid_until", "")):
                 mark("R2", "FAIL", f"approval expired or not yet valid: {a['id']}")
             if "use_limit" in omitted or "use_limit" not in a:
@@ -81,6 +97,8 @@ def verdict(bundle, baseline=False, omit=()):
             elif max(events, key=lambda h: h["time"])["state"] != "active":
                 mark("R2", "FAIL", f"approval inactive at execution: {a['id']}")
 
+    # R3: 거래와 실행기록을 TXID로 양방향 대조한다.
+    # 누락·중복 기록 또는 실행결과 불일치를 각각 구분해 남긴다.
     if not baseline and "R3" not in omitted:
         tx_by_id = {t.get("txid"): t for t in txs}
         for t in txs:
@@ -95,6 +113,8 @@ def verdict(bundle, baseline=False, omit=()):
             if log.get("txid") not in tx_by_id:
                 mark("R3", "FAIL", f"logged transaction not observed: {log.get('txid')}")
 
+    # R4: 기초잔액 + 입금 - 출금 - 관리지갑 부담 수수료 = 기말잔액.
+    # 실패한 출금 거래도 수수료를 부담할 수 있어 금액과 별도로 반영한다.
     if not baseline:
         expected = c["opening"]
         for t in txs:
@@ -108,11 +128,13 @@ def verdict(bundle, baseline=False, omit=()):
         if expected != c["closing"]:
             mark("R4", "FAIL", f"computed closing {expected}, recorded {c['closing']}")
 
+    # 자료가 부족하면 다른 규칙에서 차이를 보더라도 확정 판정을 강제하지 않는다.
     result = "UNKNOWN" if checks["R0"] == "UNKNOWN" else "FAIL" if "FAIL" in checks.values() else "PASS"
     return {"verdict": result, "checks": checks, "reasons": reasons}
 
 
 def main():
+    """CLI 인자를 읽어 JSON 증거 한 건의 판정을 표준 출력에 표시한다."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("evidence", type=Path)
     parser.add_argument("--baseline", action="store_true", help="M1 basic approval conditions")
