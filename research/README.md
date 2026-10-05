@@ -25,6 +25,18 @@ python3 research/run_n1.py <N1-wallet-public-address> --rpc http://127.0.0.1:189
 
 종료 시 `first_available_block > start_slot`이거나 서명 조회가 제한 수에 도달하거나 관측구간에 거래가 있으면 자료 충분성을 인정하지 않고 `UNKNOWN`으로 보류합니다. 잔액이 같고 보관 범위가 시작 슬롯을 포함하며 관측구간 서명이 없을 때만 N1을 `PASS`로 판정합니다. 결과 파일이 이미 있으면 덮어쓰지 않으므로 `--output`에 새 파일명을 지정하세요.
 
+### N2: 사전 승인 후 정상 출금
+
+아래 순서는 실험자가 직접 진행합니다. 스크립트는 서명하거나 송금하지 않습니다. `prepare`가 승인 A와 활성 이력 H를 **거래 전에** 저장합니다. 그다음 CLI로 SOL을 이전하고 나온 Signature를 즉시 `finalize`에 전달합니다. `finalize`는 RPC의 T, 사후 실행기록 L, 기말잔액, ledger 보관범위를 기록합니다.
+
+```bash
+python3 research/run_n2.py prepare <custody-public-address> <recipient-public-address> --amount 50000000
+solana --url http://127.0.0.1:18999 transfer <recipient-public-address> 0.05 --from <custody-keypair-path> --fee-payer <custody-keypair-path> --allow-unfunded-recipient
+python3 research/run_n2.py finalize research/evidence/n2-approved.json <Signature>
+```
+
+기본 승인 유효기간은 10분입니다. `finalize`는 관측구간에 예상 TXID 하나만 있고 시작 슬롯부터 ledger가 보존됐을 때 `coverage_complete`를 인정합니다. 이미 완료된 증거 파일은 덮어쓰지 않습니다. 비밀키 파일 내용은 Git이나 대시보드 증거 JSON에 넣지 마세요.
+
 입력 형식은 [정상 출금 예시](examples/approved-withdrawal.json)로 확인할 수 있습니다. `python research/verify.py research/examples/approved-withdrawal.json`은 `PASS`를 반환합니다. 예시의 주소와 TXID는 실제 체인 값이 아닙니다.
 
 ## 데이터와 판정
