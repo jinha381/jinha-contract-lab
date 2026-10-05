@@ -1,6 +1,6 @@
 # 압수 가상자산 관리기록 정합성 실험
 
-대상 초안: `26동계 진하 v0.2.pdf`, 「압수 가상자산의 온체인 거래와 관리기록 간 불일치 탐지를 위한 규칙 기반 상호 검증 모델」. 이 브랜치는 기존 Anchor Counter 예제와 분리된 Python 표준 라이브러리 기반 실험 환경입니다. PDF 자체와 지갑 비밀키는 저장소에 넣지 않습니다.
+대상 초안: `26동계 진하 v0.2.pdf`, 「압수 가상자산의 온체인 거래와 관리기록 간 불일치 탐지를 위한 규칙 기반 상호 검증 모델」. 이 브랜치는 Python 표준 라이브러리 기반 실험 환경입니다. PDF 자체와 지갑 비밀키는 저장소에 넣지 않습니다.
 
 ## 빠른 실행
 
@@ -12,6 +12,8 @@ python research/run_experiments.py
 ```
 
 첫 명령은 N1~N3, X1~X6, U1~U3의 합성 입력을 생성하여 M1/M2 판정을 비교하고 `research/results.json`을 씁니다. 개별 증거 JSON 검증은 아래의 Localnet 절차에서 수집한 파일로 실행합니다. 금액은 모두 lamport 정수이며 시각은 UTC ISO 8601 문자열입니다.
+
+입력 형식은 [정상 출금 예시](examples/approved-withdrawal.json)로 확인할 수 있습니다. `python research/verify.py research/examples/approved-withdrawal.json`은 `PASS`를 반환합니다. 예시의 주소와 TXID는 실제 체인 값이 아닙니다.
 
 ## 데이터와 판정
 
@@ -27,16 +29,19 @@ M1은 승인 존재·금액·수신주소만 비교합니다. M2는 R0 자료 �
 
 ## Solana Localnet 실험
 
-기존 Rust 프로그램은 SOL 단순 이전에 필요하지 않습니다. WSL2에서 Solana CLI가 설치돼 있다면 별도 터미널에 validator를 실행하고 테스트용 지갑만 사용합니다.
+네이티브 SOL 단순 이전에는 별도 온체인 프로그램이 필요하지 않습니다. WSL2에서 Solana CLI가 설치돼 있다면 별도 터미널에 validator를 실행하고 테스트용 지갑만 사용합니다.
 
 ```bash
 solana-test-validator
 solana config set --url localhost
 solana-keygen new --outfile /tmp/custody.json --no-bip39-passphrase
 solana-keygen new --outfile /tmp/recipient.json --no-bip39-passphrase
-solana airdrop 2 /tmp/custody.json
-solana transfer /tmp/recipient.json 0.1 --from /tmp/custody.json --allow-unfunded-recipient
-solana balance /tmp/custody.json
+CUSTODY=$(solana-keygen pubkey /tmp/custody.json)
+RECIPIENT=$(solana-keygen pubkey /tmp/recipient.json)
+solana airdrop 2 "$CUSTODY"
+solana balance --lamports "$CUSTODY" # 관측 시작 잔액을 기록
+solana transfer "$RECIPIENT" 0.1 --from /tmp/custody.json --allow-unfunded-recipient
+solana balance --lamports "$CUSTODY" # 관측 종료 잔액을 기록
 ```
 
 PowerShell에서 같은 PC의 Localnet RPC와 연결된다면 다음처럼 거래를 수집합니다. WSL만 RPC에 접근할 수 있는 구성이라면 WSL 안에서 명령을 실행합니다.
@@ -45,7 +50,7 @@ PowerShell에서 같은 PC의 Localnet RPC와 연결된다면 다음처럼 거�
 python research/capture_localnet.py <custody-public-address>
 ```
 
-`research/localnet-evidence.json`에서 `C.case_id`, 관측 `start/end`, 거래 이전/이후의 `opening/closing` 잔액을 입력하고 실험에 맞는 `A/H/L` 기록을 채웁니다. 수집된 TXID와 CLI 거래 결과, RPC 조회 범위, 누락된 서명 및 내부 instruction을 직접 확인한 뒤에만 `coverage_complete`를 `true`로 바꿉니다. 수집기는 단일 top-level System Program transfer만 추출합니다. 다른 거래나 누락이 있으면 `UNKNOWN`으로 유지해야 합니다. `getSignaturesForAddress`의 `--limit`가 결과를 자르면 관측범위를 좁히거나 추가 수집이 필요합니다.
+`research/localnet-evidence.json`에서 `C.case_id`, 관측 `start/end`, 거래 이전/이후의 `opening/closing` 잔액을 입력하고 실험에 맞는 `A/H/L` 기록을 채웁니다. 관측 시작은 airdrop 이후, transfer 이전으로 잡습니다. 수집된 TXID와 CLI 거래 결과, RPC 조회 범위, 누락된 서명 및 내부 instruction을 직접 확인한 뒤에만 `coverage_complete`를 `true`로 바꿉니다. 수집기는 단일 top-level System Program transfer만 추출합니다. 다른 거래가 관측범위 안에 있거나 누락이 있으면 `UNKNOWN`으로 유지해야 합니다. `getSignaturesForAddress`의 `--limit`가 결과를 자르면 추가 수집이 필요합니다.
 
 ```bash
 python research/verify.py research/localnet-evidence.json

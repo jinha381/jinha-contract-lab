@@ -1,10 +1,8 @@
-.anchor
-.DS_Store
-target
-**/*.rs.bk
-node_modules
-test-ledger
-.yarn
-.surfpool
+__pycache__/
+*.py[cod]
+.venv/
+target/
+test-ledger/
+research/results.json
 research/localnet-evidence.json
-research/__pycache__/
+research/evidence/*.json

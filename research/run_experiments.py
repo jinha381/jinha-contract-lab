@@ -50,6 +50,15 @@ def run():
     for label, name, omit in [("A1", "X3", ["H"]), ("A2", "X4", ["use_limit"]), ("A3", "X5", ["R3"])]:
         data = copy.deepcopy(cases()[name][0])
         ablations[label] = {"case": name, "original": verdict(data)["verdict"], "ablated": verdict(data, omit=omit)["verdict"]}
+    connected = approved()
+    connected["A"].append({**connected["A"][0], "id": "a2"})
+    connected["H"].append({"approval_id": "a2", "state": "active", "time": "2026-01-01T00:00:00Z"})
+    disconnected = copy.deepcopy(connected)
+    disconnected["L"][0].pop("approval_id")
+    ablations["A4"] = {"case": "two_matching_approvals", "original": verdict(connected)["verdict"], "ablated": verdict(disconnected)["verdict"]}
+    unknown_cases = [row for row in rows if row["expected"] == "UNKNOWN"]
+    ablations["A5a"] = {"cases": [row["id"] for row in unknown_cases], "forced": "PASS", "unsupported_decisions": len(unknown_cases)}
+    ablations["A5b"] = {"cases": [row["id"] for row in unknown_cases], "forced": "FAIL", "unsupported_decisions": len(unknown_cases)}
     output = {"source": "synthetic evidence; not Solana Localnet observations", "cases": rows, "ablations": ablations}
     path = Path(__file__).parent / "results.json"
     path.write_text(json.dumps(output, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

@@ -6,7 +6,7 @@ Amounts and fees are integer lamports; times are ISO 8601 UTC strings.
 
 import argparse
 import json
-from collections import Counter
+from collections import defaultdict
 from pathlib import Path
 
 
@@ -33,12 +33,18 @@ def verdict(bundle, baseline=False, omit=()):
     if checks["R0"] == "UNKNOWN":
         return {"verdict": "UNKNOWN", "checks": checks, "reasons": reasons}
 
+    required_t = ("txid", "from", "to", "amount", "time", "status", "fee")
+    if any(not isinstance(t, dict) or any(k not in t for k in required_t) for t in txs):
+        mark("R0", "UNKNOWN", "transaction fields are incomplete")
+    ids = [t["txid"] for t in txs if isinstance(t, dict) and "txid" in t]
+    if len(ids) != len(set(ids)):
+        mark("R0", "UNKNOWN", "duplicate transaction identifier")
+    if checks["R0"] == "UNKNOWN":
+        return {"verdict": "UNKNOWN", "checks": checks, "reasons": reasons}
+
     wallet = c["wallet"]
     outgoing = []
     for t in txs:
-        if not all(k in t for k in ("txid", "from", "to", "amount", "time", "status", "fee")):
-            mark("R0", "UNKNOWN", "transaction fields are incomplete")
-            continue
         if not (c["start"] <= t["time"] <= c["end"]) or t.get("asset", "SOL") != c["asset"]:
             mark("R1", "FAIL", f"transaction outside managed scope: {t['txid']}")
         if wallet not in (t["from"], t["to"]):
@@ -46,7 +52,7 @@ def verdict(bundle, baseline=False, omit=()):
         if t["from"] == wallet and t["status"] == "success":
             outgoing.append(t)
 
-    used = Counter()
+    used = defaultdict(int)
     for t in sorted(outgoing, key=lambda x: (x["time"], x["txid"])):
         candidates = [a for a in approvals if a.get("recipient") == t["to"] and a.get("amount") == t["amount"]]
         linked = [l for l in logs if l.get("txid") == t["txid"]]

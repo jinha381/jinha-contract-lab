@@ -1,0 +1,50 @@
+{
+  "C": {
+    "case_id": "demo-case",
+    "wallet": "demo-custody-address",
+    "asset": "SOL",
+    "start": "2026-01-01T00:00:00Z",
+    "end": "2026-01-02T00:00:00Z",
+    "opening": 100000,
+    "closing": 98990
+  },
+  "A": [
+    {
+      "id": "approval-1",
+      "amount": 1000,
+      "recipient": "demo-recipient-address",
+      "valid_from": "2026-01-01T00:00:00Z",
+      "valid_until": "2026-01-02T00:00:00Z",
+      "use_limit": 1
+    }
+  ],
+  "H": [
+    {
+      "approval_id": "approval-1",
+      "state": "active",
+      "time": "2026-01-01T00:00:00Z"
+    }
+  ],
+  "L": [
+    {
+      "id": "execution-1",
+      "approval_id": "approval-1",
+      "txid": "demo-txid",
+      "result": "success",
+      "time": "2026-01-01T12:01:00Z"
+    }
+  ],
+  "T": [
+    {
+      "txid": "demo-txid",
+      "from": "demo-custody-address",
+      "to": "demo-recipient-address",
+      "amount": 1000,
+      "time": "2026-01-01T12:00:00Z",
+      "status": "success",
+      "fee": 10,
+      "asset": "SOL"
+    }
+  ],
+  "coverage_complete": true
+}
