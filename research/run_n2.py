@@ -39,7 +39,7 @@ def prepare(args):
     approval_id = "approval-" + args.case_id
     evidence = {
         "C": {"case_id": args.case_id, "wallet": args.wallet, "asset": "SOL", "start": stamp(now), "end": None, "opening": balance["value"], "closing": None},
-        "A": [{"id": approval_id, "amount": args.amount, "recipient": args.recipient, "valid_from": stamp(now), "valid_until": stamp(now + timedelta(minutes=10)), "use_limit": 1}],
+        "A": [{"id": approval_id, "amount": args.amount, "recipient": args.recipient, "valid_from": stamp(now), "valid_until": stamp(now + timedelta(hours=1)), "use_limit": 1}],
         "H": [{"approval_id": approval_id, "state": "active", "time": stamp(now)}],
         "L": [], "T": [], "coverage_complete": False,
         "capture": {"rpc": args.rpc, "commitment": "finalized", "start_slot": balance["context"]["slot"], "approval_recorded_before_transfer": True},

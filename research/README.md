@@ -35,7 +35,7 @@ solana --url http://127.0.0.1:18999 transfer <recipient-public-address> 0.05 --f
 python3 research/run_n2.py finalize research/evidence/n2-approved.json <Signature>
 ```
 
-기본 승인 유효기간은 10분입니다. `finalize`는 관측구간에 예상 TXID 하나만 있고 시작 슬롯부터 ledger가 보존됐을 때 `coverage_complete`를 인정합니다. 이미 완료된 증거 파일은 덮어쓰지 않습니다. 비밀키 파일 내용은 Git이나 대시보드 증거 JSON에 넣지 마세요.
+기본 승인 유효기간은 1시간입니다. `finalize`는 관측구간에 예상 TXID 하나만 있고 시작 슬롯부터 ledger가 보존됐을 때 `coverage_complete`를 인정합니다. 이미 완료된 증거 파일은 덮어쓰지 않습니다. 비밀키 파일 내용은 Git이나 대시보드 증거 JSON에 넣지 마세요.
 
 입력 형식은 [정상 출금 예시](examples/approved-withdrawal.json)로 확인할 수 있습니다. `python research/verify.py research/examples/approved-withdrawal.json`은 `PASS`를 반환합니다. 예시의 주소와 TXID는 실제 체인 값이 아닙니다.
 
