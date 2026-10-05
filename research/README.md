@@ -15,6 +15,16 @@ python research/run_experiments.py
 
 첫 명령은 N1~N3, X1~X6, U1~U3의 합성 입력을 생성하여 M1/M2 판정을 비교하고 `research/results.json`을 씁니다. 개별 증거 JSON 검증은 아래의 Localnet 절차에서 수집한 파일로 실행합니다. 금액은 모두 lamport 정수이며 시각은 UTC ISO 8601 문자열입니다.
 
+### N1: 거래 없는 관측구간
+
+미리 자금을 넣은 전용 지갑의 **공개주소**를 사용합니다. 아래 명령은 거래를 만들지 않고, 최종 확정된 잔액과 슬롯을 시작·종료 시점에 읽습니다. 종료 직후 서명 목록과 ledger 보관 범위를 조회해 `research/evidence/n1-rerun.json`에 기록합니다.
+
+```bash
+python3 research/run_n1.py <N1-wallet-public-address> --rpc http://127.0.0.1:18999 --seconds 60
+```
+
+종료 시 `first_available_block > start_slot`이거나 서명 조회가 제한 수에 도달하거나 관측구간에 거래가 있으면 자료 충분성을 인정하지 않고 `UNKNOWN`으로 보류합니다. 잔액이 같고 보관 범위가 시작 슬롯을 포함하며 관측구간 서명이 없을 때만 N1을 `PASS`로 판정합니다. 결과 파일이 이미 있으면 덮어쓰지 않으므로 `--output`에 새 파일명을 지정하세요.
+
 입력 형식은 [정상 출금 예시](examples/approved-withdrawal.json)로 확인할 수 있습니다. `python research/verify.py research/examples/approved-withdrawal.json`은 `PASS`를 반환합니다. 예시의 주소와 TXID는 실제 체인 값이 아닙니다.
 
 ## 데이터와 판정
