@@ -64,6 +64,7 @@ def verdict(bundle, baseline=False, omit=()):
             continue
         if not candidates:
     # 승인 자체가 없는 경우와 승인 조건 불일치를 구분
+            detail = f"approval conditions mismatch for {t['txid']}"
             if not approvals:
                 detail = f"no approval exists for {t['txid']}"
 
@@ -90,11 +91,10 @@ def verdict(bundle, baseline=False, omit=()):
                         f"transaction recipient={t['to']}"
                     )
 
-                else:
-                     detail = f"approval conditions mismatch for {t['txid']}"
+            
 
-        mark("R2", "FAIL", detail)
-        continue
+            mark("R2", "FAIL", detail)
+            continue
         a = candidates[0]
         if not baseline:
             if not (a.get("valid_from", "") <= t["time"] <= a.get("valid_until", "")):
