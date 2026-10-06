@@ -57,7 +57,8 @@ def verdict(bundle, baseline=False, omit=()):
         candidates = [a for a in approvals if a.get("recipient") == t["to"] and a.get("amount") == t["amount"]]
         linked = [l for l in logs if l.get("txid") == t["txid"]]
         explicit = {l.get("approval_id") for l in linked if l.get("approval_id")}
-        if explicit:
+
+        if "explicit_link" not in omitted and explicit:
             candidates = [a for a in candidates if a.get("id") in explicit]
         if len(candidates) > 1 and not baseline:
             mark("R0", "UNKNOWN", f"ambiguous approval for {t['txid']}")
@@ -146,7 +147,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("evidence", type=Path)
     parser.add_argument("--baseline", action="store_true", help="M1 basic approval conditions")
-    parser.add_argument("--omit", action="append", choices=["H", "use_limit", "R3"])
+    parser.add_argument("--omit", choices=["H", "use_limit", "R3", "explicit_link"])
     args = parser.parse_args()
     data = json.loads(args.evidence.read_text(encoding="utf-8"))
     print(json.dumps(verdict(data, args.baseline, args.omit or ()), ensure_ascii=False, indent=2))
