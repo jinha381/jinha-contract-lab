@@ -267,8 +267,7 @@ def finalize(args):
 
     data["T"] = transactions
 
-    # X6에서는 관리 실행기록이 존재하지 않는 무승인 출금을 재현한다.
-    data["L"] = []
+    data["L"] = [{"id": f"execution-{data['C']['case_id']}-1", "approval_id": None, "txid": withdrawal["txid"], "result": withdrawal["status"], "time": withdrawal["time"]}, {"id": f"execution-{data['C']['case_id']}-2", "approval_id": None, "txid": redeposit["txid"], "result": redeposit["status"], "time": redeposit["time"]}]
 
     data["coverage_complete"] = coverage
 
@@ -343,15 +342,14 @@ def main():
 
     start.add_argument("recipient",  help="counterparty wallet public address")
 
-    start.add_argument("--case-id", default="localnet-X6-001")
+    start.add_argument("--case-id", default="localnet-X6-002")
 
     start.add_argument(
         "--rpc",
         default="http://127.0.0.1:18999"
     )
 
-    start.add_argument("--output", type=Path, default=Path("research/evidence/x6-withdraw-redeposit.json"))
-
+    start.add_argument("--output", type=Path, default=Path("research/evidence/x6-002-withdraw-redeposit.json"))
     finish = sub.add_parser(
         "finalize",
         help="collect unauthorized withdrawal"
