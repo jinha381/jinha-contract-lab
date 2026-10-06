@@ -1,4 +1,4 @@
-"""U1: 정상 증거의 관측 완전성 정보를 불충분 상태로 변형하여 UNKNOWN 판정을 검증한다."""
+"""U3: 승인 상태 이력 부족으로 실행 시점의 승인 상태를 확인할 수 없는 상황을 검증한다."""
 
 import argparse
 import json
@@ -12,17 +12,16 @@ def run(args):
     source = json.loads(args.source.read_text(encoding="utf-8"))
     data = deepcopy(source)
 
-    # 정상 N2 증거 자체는 변경하지 않고 U1용 사본을 생성한다.
     data["C"]["case_id"] = args.case_id
 
-    # U1의 유일한 실험 변수:
-    # 온체인 관측 범위의 완전성을 보장할 수 없는 상태
-    data["coverage_complete"] = False
+    # U3의 유일한 실험 변수:
+    # 승인 A는 유지하되 승인 상태 이력 H를 제거한다.
+    data["H"] = []
 
     data["evidence_note"] = (
-        "U1 관측 정보 부족 실험. 정상 N2 증거 묶음을 기준 데이터로 사용하고, "
-        "온체인 관측 범위의 완전성을 보장할 수 없는 상황을 모사하기 위해 "
-        "coverage_complete=False로 설정하였다."
+        "U3 승인 상태 이력 부족 실험. 정상 N2 증거 묶음을 기준으로 "
+        "승인 기록 A와 거래·실행기록은 유지하되 승인 상태 이력 H만 제거하여, "
+        "거래 실행 시점의 승인 활성 상태를 확인할 수 없는 상황을 구성하였다."
     )
 
     if args.output.exists():
@@ -38,31 +37,31 @@ def run(args):
     )
 
     source_m2 = verdict(source)
-    u1_m1 = verdict(data, baseline=True)
-    u1_m2 = verdict(data)
+    u3_m1 = verdict(data, baseline=True)
+    u3_m2 = verdict(data)
 
     print(f"기준 증거: {args.source}")
-    print(f"U1 증거: {args.output}")
+    print(f"U3 증거: {args.output}")
 
     print()
     print("=== 기준 N2 ===")
     print(f"M2 verdict: {source_m2['verdict']}")
-    print(f"coverage_complete: {source.get('coverage_complete')}")
 
     print()
-    print("=== U1 ===")
-    print(f"coverage_complete: {data['coverage_complete']}")
+    print("=== U3 ===")
+    print(f"승인 수: {len(data['A'])}")
+    print(f"승인 상태 이력 수: {len(data['H'])}")
 
     print()
     print("M1")
-    print(f"verdict: {u1_m1['verdict']}")
-    print(f"reasons: {u1_m1['reasons']}")
+    print(f"verdict: {u3_m1['verdict']}")
+    print(f"reasons: {u3_m1['reasons']}")
 
     print()
     print("M2")
-    print(f"verdict: {u1_m2['verdict']}")
-    print(f"checks: {u1_m2['checks']}")
-    print(f"reasons: {u1_m2['reasons']}")
+    print(f"verdict: {u3_m2['verdict']}")
+    print(f"checks: {u3_m2['checks']}")
+    print(f"reasons: {u3_m2['reasons']}")
 
     print()
     print(f"saved: {args.output}")
@@ -79,13 +78,13 @@ def main():
 
     parser.add_argument(
         "--case-id",
-        default="localnet-U1-002"
+        default="localnet-U3-001"
     )
 
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("research/evidence/u1-002-insufficient-observation.json")
+        default=Path("research/evidence/u3-missing-approval-history.json")
     )
 
     args = parser.parse_args()
