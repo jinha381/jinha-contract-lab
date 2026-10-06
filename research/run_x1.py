@@ -1,7 +1,8 @@
-"""N3(외부지갑에서 관리지갑으로 정상 입금)의 증거를 수집한다.
+"""User-run X1: unauthorized SOL withdrawal without approval.
 
-prepare로 입금 전 기초잔액·시작 슬롯을 저장하고, 사용자가 송금한 뒤
-finalize로 거래·기말잔액·ledger 보관 범위를 기록한다. 서명이나 송금은 하지 않는다.
+The script records the observation window before the transfer,
+then collects the manually generated transaction and compares M1/M2.
+It never signs or sends SOL.
 """
 
 import argparse
@@ -14,15 +15,11 @@ from pathlib import Path
 from verify import verdict
 
 
-def stamp(value=None):
-    """현재 또는 지정된 시각을 UTC ISO 8601 초 단위로 표시한다."""
-    return (value or datetime.now(timezone.utc)).isoformat(
-        timespec="seconds"
-    ).replace("+00:00", "Z")
+def stamp(value):
+    return value.isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
 def rpc(url, method, params=None):
-    """JSON-RPC 호출 결과만 반환하며 서버 오류는 예외로 올린다."""
     payload = json.dumps({
         "jsonrpc": "2.0",
         "id": 1,
@@ -44,24 +41,38 @@ def rpc(url, method, params=None):
 
     return answer["result"]
 
+
 def chain_time(url):
-    slot = rpc(url, "getSlot", [{"commitment": "finalized"}])
-    block_time = rpc(url, "getBlockTime", [slot])
+    slot = rpc(
+        url,
+        "getSlot",
+        [{"commitment": "finalized"}]
+    )
+
+    block_time = rpc(
+        url,
+        "getBlockTime",
+        [slot]
+    )
 
     if block_time is None:
-        raise RuntimeError("현재 finalized slot의 blockTime을 조회할 수 없습니다.")
+        raise RuntimeError(
+            "현재 finalized slot의 blockTime을 조회할 수 없습니다."
+        )
 
-    return datetime.fromtimestamp(block_time, timezone.utc)
+    return datetime.fromtimestamp(
+        block_time,
+        timezone.utc
+    )
+
 
 def prepare(args):
-    """관측 시작 전에 확정 잔액과 시작 슬롯을 새 증거 JSON에 기록한다."""
     if args.output.exists():
         raise SystemExit(
             f"파일이 이미 있습니다: {args.output}. "
             "새 --output 경로를 사용하세요."
         )
 
-    # 입금 전 잔액을 기준으로 삼고 같은 RPC 응답의 context.slot을 보존한다.
     balance = rpc(
         args.rpc,
         "getBalance",
@@ -81,50 +92,54 @@ def prepare(args):
             "closing": None
         },
 
-        # N3는 외부지갑 → 관리지갑 정상 입금이므로
-        # 출금 승인 A/H는 사용하지 않는다.
+        # X1의 핵심:
+        # 출금 승인이 존재하지 않는다.
         "A": [],
         "H": [],
 
         "L": [],
         "T": [],
 
-        # finalize 전에는 종료 자료가 없으므로 PASS 판정을 허용하지 않는다.
         "coverage_complete": False,
 
         "capture": {
             "rpc": args.rpc,
             "commitment": "finalized",
             "start_slot": balance["context"]["slot"],
-            "deposit_recorded_before_transfer": True
+            "scenario": "X1 unauthorized withdrawal"
         },
 
         "evidence_note":
-            "N3 정상 입금 관측 시작. "
-            "외부지갑에서 관리지갑으로 입금한 후 "
-            "Signature를 finalize에 전달합니다."
+            "X1 승인 없는 출금 실험. "
+            "A/H를 생성하지 않은 상태에서 관리지갑의 출금을 수행한다."
     }
 
-    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.parent.mkdir(
+        parents=True,
+        exist_ok=True
+    )
 
     args.output.write_text(
-        json.dumps(evidence, ensure_ascii=False, indent=2) + "\n",
+        json.dumps(
+            evidence,
+            ensure_ascii=False,
+            indent=2
+        ) + "\n",
         encoding="utf-8"
     )
 
-    print(f"N3 관측 시작: {args.output}")
+    print(f"X1 관측 시작: {args.output}")
     print(
         f"시작 {evidence['C']['start']} | "
         f"slot {balance['context']['slot']} | "
         f"{balance['value']} lamports"
     )
     print(f"관리지갑: {args.wallet}")
-    print("이제 외부지갑에서 관리지갑으로 SOL을 전송하세요.")
-    print("출력된 Signature를 finalize 명령에 사용하세요.")
+    print("승인 A/H는 생성하지 않았습니다.")
+    print("이제 관리지갑에서 외부지갑으로 SOL을 전송하세요.")
 
 
 def finalize(args):
-    """입금 TXID를 조회해 증거를 완성하고 공통 검증기로 판정한다."""
     data = json.loads(
         args.evidence.read_text(encoding="utf-8")
     )
@@ -147,7 +162,6 @@ def finalize(args):
         "maxSupportedTransactionVersion": 0
     }
 
-    # 거래 직후에는 finalized 상태가 아닐 수 있어 짧게 재조회한다.
     detail = None
 
     for _ in range(15):
@@ -171,8 +185,6 @@ def finalize(args):
     message = detail["transaction"]["message"]
     instructions = message.get("instructions", [])
 
-    # 실험 범위가 단일 System Program 이전이므로 다른 instruction이
-    # 섞인 거래는 자동 판정 대상으로 삼지 않는다.
     transfers = [
         i["parsed"]["info"]
         for i in instructions
@@ -187,16 +199,16 @@ def finalize(args):
     ):
         raise SystemExit(
             "단일 System Program transfer가 아닙니다. "
-            "자동 N3 수집을 중단합니다."
+            "자동 X1 수집을 중단합니다."
         )
 
     transfer = transfers[0]
 
-    # N3는 반드시 관리지갑으로 들어오는 거래여야 한다.
-    if transfer["destination"] != wallet:
+    # X1은 관리지갑에서 나가는 출금이어야 한다.
+    if transfer["source"] != wallet:
         raise SystemExit(
-            "선택한 거래의 수신주소가 관리지갑이 아닙니다. "
-            "N3 입금 거래 Signature를 확인하세요."
+            "선택한 거래의 송신주소가 관리지갑이 아닙니다. "
+            "X1 출금 Signature를 확인하세요."
         )
 
     transaction = {
@@ -216,13 +228,12 @@ def finalize(args):
             else "success"
         ),
 
-        # 송신자가 외부지갑이므로
-        # 관리지갑의 자산흐름에서는 fee를 차감하지 않는다.
-        "fee": 0,
+        # 관리지갑이 송신자이므로 실제 fee 반영
+        "fee": detail["meta"]["fee"],
+
         "asset": "SOL"
     }
 
-    # 기말잔액의 finalized 슬롯이 거래 슬롯 이후여야 해당 입금이 반영된다.
     closing_response = rpc(
         url,
         "getBalance",
@@ -233,8 +244,7 @@ def finalize(args):
 
     if closing_slot < detail["slot"]:
         raise SystemExit(
-            "기말 잔액 스냅샷이 거래 슬롯보다 이전입니다. "
-            "finalize를 다시 시도하세요."
+            "기말 잔액 스냅샷이 거래 슬롯보다 이전입니다."
         )
 
     first_available = rpc(
@@ -268,12 +278,10 @@ def finalize(args):
     }
 
     expected = (
-        transaction["to"] == wallet
+        transaction["from"] == wallet
         and transaction["status"] == "success"
     )
 
-    # 시작 슬롯부터 이력이 보존되고 구간 서명이 예상 입금 한 건일 때만
-    # coverage_complete를 True로 둔다. 부족하면 R0 UNKNOWN으로 남긴다.
     coverage = (
         first_available <= start_slot
         and len(signatures) < 1000
@@ -281,13 +289,18 @@ def finalize(args):
         and expected
     )
 
-    data["C"]["end"] = stamp(chain_time(url))
-    data["C"]["closing"] = closing_response["value"]
+    data["C"]["end"] = stamp(
+        chain_time(url)
+    )
+
+    data["C"]["closing"] = (
+        closing_response["value"]
+    )
 
     data["T"] = [transaction]
 
-    # 현재 verify.py의 R3는 모든 T에 대응하는
-    # 실행기록 L을 요구하므로 정상 입금 기록을 생성한다.
+    # 실제 거래가 발생했으므로 실행기록 L은 존재.
+    # 단, 승인 자체가 없으므로 approval_id는 None.
     data["L"] = [{
         "id": "execution-" + data["C"]["case_id"],
         "approval_id": None,
@@ -308,40 +321,70 @@ def finalize(args):
     })
 
     data["evidence_note"] = (
-        "외부지갑에서 관리지갑으로 정상 입금한 N3 사례입니다. "
-        "A/H는 사용하지 않으며, L은 입금 확인 기록입니다. "
-        "coverage는 ledger 보관 범위와 관측구간 서명으로 확인합니다."
+        "X1 승인 없는 출금. "
+        "A/H 없이 실제 출금 T가 발생했으며 "
+        "실행기록 L과 transaction fee를 포함하여 검증한다."
     )
 
     args.evidence.write_text(
-        json.dumps(data, ensure_ascii=False, indent=2) + "\n",
+        json.dumps(
+            data,
+            ensure_ascii=False,
+            indent=2
+        ) + "\n",
         encoding="utf-8"
     )
 
-    result = verdict(data)
+    # M1 / M2 모두 계산
+    m1_result = verdict(
+        data,
+        baseline=True
+    )
+
+    m2_result = verdict(data)
 
     print(f"TXID {args.signature}")
     print(
-        f"입금 {transaction['time']} | "
+        f"출금 {transaction['time']} | "
         f"slot {detail['slot']} | "
-        f"{transaction['amount']} lamports"
+        f"{transaction['amount']} lamports | "
+        f"fee {transaction['fee']} lamports"
     )
+
     print(
-        f"기말 잔액 {closing_response['value']} lamports | "
+        f"기초잔액 {data['C']['opening']} lamports"
+    )
+
+    print(
+        f"기말잔액 {data['C']['closing']} lamports"
+    )
+
+    print(
         f"관측구간 서명 {len(in_window)}개"
     )
+
     print(
         f"첫 보관 블록 {first_available} | "
         f"시작 slot {start_slot} | "
         f"coverage {coverage}"
     )
-    print(f"M2 verdict: {result['verdict']}")
-    print(f"checks: {result['checks']}")
+
+    print()
+    print("=== M1 ===")
+    print(f"verdict: {m1_result['verdict']}")
+    print(f"reasons: {m1_result['reasons']}")
+
+    print()
+    print("=== M2 ===")
+    print(f"verdict: {m2_result['verdict']}")
+    print(f"checks: {m2_result['checks']}")
+    print(f"reasons: {m2_result['reasons']}")
+
+    print()
     print(f"saved: {args.evidence}")
 
 
 def main():
-    """사용자가 선택한 prepare 또는 finalize 단계만 수행한다."""
     parser = argparse.ArgumentParser(
         description=__doc__
     )
@@ -353,7 +396,7 @@ def main():
 
     start = sub.add_parser(
         "prepare",
-        help="start observation before a normal deposit"
+        help="start X1 observation"
     )
 
     start.add_argument(
@@ -363,7 +406,7 @@ def main():
 
     start.add_argument(
         "--case-id",
-        default="localnet-N3-001"
+        default="localnet-X1-001"
     )
 
     start.add_argument(
@@ -375,13 +418,13 @@ def main():
         "--output",
         type=Path,
         default=Path(
-            "research/evidence/n3-deposit.json"
+            "research/evidence/x1-unauthorized.json"
         )
     )
 
     finish = sub.add_parser(
         "finalize",
-        help="collect the deposit after manual transfer"
+        help="collect unauthorized withdrawal"
     )
 
     finish.add_argument(
