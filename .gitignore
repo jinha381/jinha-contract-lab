@@ -6,3 +6,5 @@ test-ledger/
 research/results.json
 research/localnet-evidence.json
 research/evidence/*.json
+x7_bob.json
+x7_manager.json
